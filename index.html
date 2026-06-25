@@ -109,10 +109,7 @@
       x5-video-player-type="h5"
       x5-video-player-fullscreen="true"
       preload="auto"
-    >
-      <source src="https://tmpfiles.org/wVwnWlRHnHme/video_small.mp4" type="video/mp4" />
-      您的浏览器不支持视频播放
-    </video>
+    ></video>
   </div>
 
   <!-- 播放按钮（移动端首次需要用户点击） -->
@@ -129,11 +126,15 @@
     </div>
   </div>
 
+  <!-- HLS.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
     const vid = document.getElementById('vid');
     const overlay = document.getElementById('overlay');
     const loading = document.getElementById('loading');
     const errorMsg = document.getElementById('errorMsg');
+
+    const playlistUrl = 'playlist.m3u8';
 
     // 点击播放按钮
     function startPlay() {
@@ -143,22 +144,39 @@
         loading.classList.remove('show');
       }).catch((e) => {
         loading.classList.remove('show');
-        // 有些浏览器仍需要第二次点击
         vid.controls = true;
         overlay.classList.add('hidden');
       });
     }
 
-    // 视频可以播放时隐藏加载
+    // 加载提示
     vid.addEventListener('canplay', () => {
       loading.classList.remove('show');
     });
 
-    // 加载出错
     vid.addEventListener('error', () => {
       loading.classList.remove('show');
       errorMsg.classList.add('show');
     });
+
+    // HLS 播放
+    if (vid.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari 原生支持 HLS
+      vid.src = playlistUrl;
+    } else if (Hls.isSupported()) {
+      const hls = new Hls();
+      hls.loadSource(playlistUrl);
+      hls.attachMedia(vid);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        loading.classList.remove('show');
+      });
+      hls.on(Hls.Events.ERROR, () => {
+        loading.classList.remove('show');
+        errorMsg.classList.add('show');
+      });
+    } else {
+      errorMsg.classList.add('show');
+    }
 
     // iOS 微信/QQ 内置浏览器兼容
     document.addEventListener('WeixinJSBridgeReady', () => {
