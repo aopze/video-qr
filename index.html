@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>视频播放</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin:0; padding:0; box-sizing: border-box; }
 
     body {
       background: #000;
@@ -126,8 +126,8 @@
     </div>
   </div>
 
-  <!-- HLS.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <!-- HLS.js 本地文件 -->
+  <script src="hls.min.js"></script>
   <script>
     const vid = document.getElementById('vid');
     const overlay = document.getElementById('overlay');
@@ -135,53 +135,77 @@
     const errorMsg = document.getElementById('errorMsg');
 
     const playlistUrl = 'playlist.m3u8';
+    let hls = null;
+
+    // 初始化视频（页面加载时）
+    function initVideo() {
+      if (vid.canPlayType('application/vnd.apple.mpegurl')) {
+        // Safari 原生支持 HLS
+        vid.src = playlistUrl;
+        vid.addEventListener('loadedmetadata', () => {
+          loading.classList.remove('show');
+        });
+        vid.addEventListener('error', () => {
+          loading.classList.remove('show');
+          errorMsg.classList.add('show');
+        });
+      } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+        // 非 Safari 使用 HLS.js
+        hls = new Hls({
+          debug: false,
+          enableWorker: true,
+          lowLatencyMode: false,
+        });
+        hls.loadSource(playlistUrl);
+        hls.attachMedia(vid);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          loading.classList.remove('show');
+        });
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            loading.classList.remove('show');
+            errorMsg.classList.add('show');
+          }
+        });
+      } else {
+        errorMsg.classList.add('show');
+      }
+    }
 
     // 点击播放按钮
     function startPlay() {
       loading.classList.add('show');
-      vid.play().then(() => {
+      // 先尝试播放
+      const playPromise = vid.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          overlay.classList.add('hidden');
+          loading.classList.remove('show');
+        }).catch((e) => {
+          loading.classList.remove('show');
+          // 有些浏览器需要再次点击
+          vid.controls = true;
+          overlay.classList.add('hidden');
+        });
+      } else {
         overlay.classList.add('hidden');
         loading.classList.remove('show');
-      }).catch((e) => {
-        loading.classList.remove('show');
-        vid.controls = true;
-        overlay.classList.add('hidden');
-      });
+      }
     }
 
-    // 加载提示
-    vid.addEventListener('canplay', () => {
-      loading.classList.remove('show');
-    });
-
-    vid.addEventListener('error', () => {
-      loading.classList.remove('show');
-      errorMsg.classList.add('show');
-    });
-
-    // HLS 播放
-    if (vid.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari 原生支持 HLS
-      vid.src = playlistUrl;
-    } else if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(playlistUrl);
-      hls.attachMedia(vid);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        loading.classList.remove('show');
-      });
-      hls.on(Hls.Events.ERROR, () => {
-        loading.classList.remove('show');
-        errorMsg.classList.add('show');
-      });
+    // 页面加载完成后初始化视频
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initVideo);
     } else {
-      errorMsg.classList.add('show');
+      initVideo();
     }
 
     // iOS 微信/QQ 内置浏览器兼容
-    document.addEventListener('WeixinJSBridgeReady', () => {
-      vid.load();
-    });
+    if (typeof WeixinJSBridge !== 'undefined') {
+      document.addEventListener('WeixinJSBridgeReady', () => {
+        vid.load();
+      });
+    }
   </script>
 </body>
 </html>
